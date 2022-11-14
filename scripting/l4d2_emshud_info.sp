@@ -5,7 +5,7 @@
 #include <l4d2_ems_hud>
 
 #define CVAR_FLAGS		FCVAR_NOTIFY
-#define PLUGIN_VERSION	"1.9.10"
+#define PLUGIN_VERSION	"1.10.11"
 
 //设置数组数量(最大值:9).
 #define SurvivorArray	9
@@ -15,8 +15,8 @@ float g_fMapRunTime;
 
 int    g_iPlayerNum, g_iChapterTotal[2], g_iCumulativeTotal[2], g_iKillSpecialNumber[MAXPLAYERS+1], g_iHeadSpecialNumber[MAXPLAYERS+1];
 
-int    g_iSurvivorHealth, g_iMaxReviveCount, g_iFakeRanking, g_iTypeRanking, g_iInfoRanking;
-ConVar g_hSurvivorHealth, g_hMaxReviveCount, g_hFakeRanking, g_hTypeRanking, g_hInfoRanking;
+int    g_iSurvivorHealth, g_iMaxReviveCount, g_iPlayersNumber, g_iShowServerName, g_iShowServerNumber, g_iShowRunningTime, g_iShowServerTime, g_iShowKillNumber, g_iFakeRanking, g_iTypeRanking, g_iInfoRanking;
+ConVar g_hSurvivorHealth, g_hMaxReviveCount, g_hPlayersNumber, g_hShowServerName, g_hShowServerNumber, g_hShowRunningTime, g_hShowServerTime, g_hShowKillNumber, g_hFakeRanking, g_hTypeRanking, g_hInfoRanking;
 
 char sDate[][] = {"天", "时", "分", "秒"};
 char g_sWeekName[][] = {"一", "二", "三", "四", "五", "六", "日"};
@@ -42,12 +42,24 @@ public void OnPluginStart()
 	g_hSurvivorHealth	= FindConVar("survivor_limp_health");
 	g_hMaxReviveCount	= FindConVar("survivor_max_incapacitated_count");
 
-	g_hFakeRanking	= CreateConVar("l4d2_emshud_ranking_fake", "0", "排行榜显示电脑幸存者? 0=显示, 1=忽略.", CVAR_FLAGS);
-	g_hTypeRanking	= CreateConVar("l4d2_emshud_ranking_type", "1", "排行榜第二组显示什么? 0=血量, 1=爆头.", CVAR_FLAGS);
-	g_hInfoRanking	= CreateConVar("l4d2_emshud_ranking_info", "8", "击杀特感排名显示多少行(最大值:8). 0=禁用.", CVAR_FLAGS);
+	g_hPlayersNumber	= CreateConVar("l4d2_emshud_show_players_number", "1", "显示玩家数量信息. 0=禁用, 1=显示.", CVAR_FLAGS);
+	g_hShowServerName	= CreateConVar("l4d2_emshud_show_server_name", "1", "显示服务器名称. 0=禁用, 1=显示.", CVAR_FLAGS);
+	g_hShowServerNumber	= CreateConVar("l4d2_emshud_show_server_name", "1", "显示服务器人数. 0=禁用, 1=显示.", CVAR_FLAGS);
+	g_hShowRunningTime	= CreateConVar("l4d2_emshud_show_running_time", "1", "显示运行的时间. 0=禁用, 1=显示.", CVAR_FLAGS);
+	g_hShowServerTime	= CreateConVar("l4d2_emshud_show_server_time", "1", "显示服务器时间. 0=禁用, 1=显示.", CVAR_FLAGS);
+	g_hShowKillNumber	= CreateConVar("l4d2_emshud_show_kill_number", "1", "显示击杀总数量. 0=禁用, 1=显示.", CVAR_FLAGS);
+	g_hFakeRanking		= CreateConVar("l4d2_emshud_ranking_fake", "0", "排行榜显示电脑幸存者? 0=显示, 1=忽略.", CVAR_FLAGS);
+	g_hTypeRanking		= CreateConVar("l4d2_emshud_ranking_type", "1", "排行榜第二组显示什么? 0=血量, 1=爆头.", CVAR_FLAGS);
+	g_hInfoRanking		= CreateConVar("l4d2_emshud_ranking_info", "8", "击杀特感排名显示多少行(最大值:8). 0=禁用.", CVAR_FLAGS);
 
 	g_hSurvivorHealth.AddChangeHook(ConVarChanged);
 	g_hMaxReviveCount.AddChangeHook(ConVarChanged);
+	g_hPlayersNumber.AddChangeHook(ConVarChanged);
+	g_hShowServerName.AddChangeHook(ConVarChanged);
+	g_hShowServerNumber.AddChangeHook(ConVarChanged);
+	g_hShowRunningTime.AddChangeHook(ConVarChanged);
+	g_hShowServerTime.AddChangeHook(ConVarChanged);
+	g_hShowKillNumber.AddChangeHook(ConVarChanged);
 	g_hFakeRanking.AddChangeHook(ConVarChanged);
 	g_hTypeRanking.AddChangeHook(ConVarChanged);
 	g_hInfoRanking.AddChangeHook(ConVarChanged);
@@ -72,6 +84,12 @@ void GetCvars()
 {
 	g_iSurvivorHealth	= g_hSurvivorHealth.IntValue;
 	g_iMaxReviveCount	= g_hMaxReviveCount.IntValue;
+	g_iPlayersNumber	= g_hPlayersNumber.IntValue;
+	g_iShowServerName	= g_hShowServerName.IntValue;
+	g_iShowServerNumber	= g_hShowServerNumber.IntValue;
+	g_iShowRunningTime	= g_hShowRunningTime.IntValue;
+	g_iShowServerTime	= g_hShowServerTime.IntValue;
+	g_iShowKillNumber	= g_hShowKillNumber.IntValue;
 	g_iFakeRanking		= g_hFakeRanking.IntValue;
 	g_iTypeRanking		= g_hTypeRanking.IntValue;
 	g_iInfoRanking		= g_hInfoRanking.IntValue;
@@ -141,7 +159,7 @@ public void OnMapStart()
 //回合开始.
 public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
-	g_bShowHUD = true;
+	g_bShowHUD = false;
 	
 	//创建计时器显示HUD.
 	IsCreateTimerShowHUD();
@@ -159,7 +177,7 @@ public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 //回合结束.
 public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
-	g_bShowHUD = false;
+	g_bShowHUD = true;
 	//清除击杀HUD.
 	IsRemoveHUD();
 }
@@ -176,40 +194,44 @@ public Action DisplayInfo(Handle timer)
 	//清除击杀HUD.
 	IsRemoveHUD();
 	//显示所有HUD.
-	IsShowallHUD();
+	IsShowAllHUD();
 	return Plugin_Continue;
 }
 
 //清除指定HUD.
 void IsRemoveHUD()
 {
-	if (g_bShowHUD)
-		return;
-	/*
 	//删除人数运行HUD.
-	if(HUDSlotIsUsed(HUD_SCORE_1))
-		RemoveHUD(HUD_SCORE_1);
+	if(g_iShowServerNumber == 0)
+		if(HUDSlotIsUsed(HUD_SCORE_1))
+			RemoveHUD(HUD_SCORE_1);
 	
 	//删除击杀数量HUD.
-	if(HUDSlotIsUsed(HUD_MID_BOX))
-		RemoveHUD(HUD_MID_BOX);
+	if(g_iShowKillNumber == 0)
+		if(HUDSlotIsUsed(HUD_MID_BOX))
+			RemoveHUD(HUD_MID_BOX);
 
 	//删除运行时间HUD.
-	if(HUDSlotIsUsed(HUD_SCORE_TITLE))
-		RemoveHUD(HUD_SCORE_TITLE);
+	if(g_iShowRunningTime == 0)
+		if(HUDSlotIsUsed(HUD_SCORE_TITLE))
+			RemoveHUD(HUD_SCORE_TITLE);
 	
 	//删除当前时间HUD.
-	if(HUDSlotIsUsed(HUD_MID_TOP))
-		RemoveHUD(HUD_MID_TOP);
+	if(g_iShowServerTime == 0)
+		if(HUDSlotIsUsed(HUD_MID_TOP))
+			RemoveHUD(HUD_MID_TOP);
 
 	//删除玩家数量HUD.
-	if(HUDSlotIsUsed(HUD_SCORE_4))
-		RemoveHUD(HUD_SCORE_4);
-
+	if(g_iPlayersNumber == 0)
+		if(HUDSlotIsUsed(HUD_SCORE_4))
+			RemoveHUD(HUD_SCORE_4);
+	
 	//删除服名HUD.
-	if(HUDSlotIsUsed(HUD_LEFT_TOP))
-		RemoveHUD(HUD_LEFT_TOP);
-	*/
+	if(g_iShowServerName == 0)
+		if(HUDSlotIsUsed(HUD_LEFT_TOP))
+			RemoveHUD(HUD_LEFT_TOP);
+	
+	/* 以下是排行榜相关HUD. */
 	//删除玩家状态HUD.
 	if(HUDSlotIsUsed(HUD_LEFT_BOT))
 		RemoveHUD(HUD_LEFT_BOT);
@@ -228,22 +250,29 @@ void IsRemoveHUD()
 }
 
 //显示指定HUD.
-void IsShowallHUD()
+void IsShowAllHUD()
 {
-	//当前服务器时间.
-	IsCurrentTime();
-	//显示章节击杀数.
-	IsChapterStatistics();
+	//显示服务器时间.
+	if(g_iShowServerTime != 0)
+		IsShowServerTime();
+	//显示运行的时间.
+	if(g_iShowRunningTime != 0)
+		IsShowRunningTime();
 	//显示累计击杀数.
-	IsCumulativeStatistics();
+	if(g_iShowKillNumber != 0)
+		IsCumulativeStatistics();
 	//显示连接,闲置,旁观,特感和幸存者数量.
-	IsPlayersNumber();
+	if(g_iPlayersNumber != 0)
+		IsPlayersNumber();
 	//显示服务器名字.
-	IsShowServerName();
+	if(g_iShowServerName != 0)
+		IsShowServerName();
 	//显示服务器人数.
-	IsShowServersNumber();
+	if(g_iShowServerNumber != 0)
+		IsShowServersNumber();
 	//显示击杀特感排行榜.
-	IsKillLeaderboards();
+	if(g_iInfoRanking != 0)
+		IsKillLeaderboards();
 }
 
 //显示服务器名字.
@@ -260,7 +289,7 @@ void IsShowServerName()
 void IsShowServersNumber()
 {
 	char g_sTotal[256];
-	FormatEx(g_sTotal, sizeof(g_sTotal), "(%d/%d)", g_iPlayerNum, IsMaxPlayers());
+	FormatEx(g_sTotal, sizeof(g_sTotal), "(%d/%d)", g_iPlayerNum, GetMaxPlayers());
 	HUDSetLayout(HUD_SCORE_1, HUD_FLAG_ALIGN_CENTER|HUD_FLAG_NOBG|HUD_FLAG_TEXT, g_sTotal);
 	HUDPlace(HUD_SCORE_1,0.00,0.00,1.0,0.03);
 }
@@ -268,7 +297,7 @@ void IsShowServersNumber()
 //显示击杀特感排行榜.
 void IsKillLeaderboards()
 {
-	if (GetPlayersMaxNumber(2, false) <= 0 || g_iInfoRanking <= 0 || !g_bShowHUD)//没有幸存者或禁用时直接返回，不执行后面的操作.
+	if (g_bShowHUD || GetPlayersMaxNumber(2, false) <= 0)//没有幸存者或禁用时直接返回，不执行后面的操作.
 		return;
 
 	int temp[2], iMax[2], ranking_count = 1;
@@ -283,7 +312,7 @@ void IsKillLeaderboards()
 		{
 			int iBot = IsClientIdle(i);
 
-			if (g_iFakeRanking != 0 && IsFakeClient(!iBot ? i : iBot))//这里判断是否显示电脑幸存者.
+			if (iBot != 0 && IsClientConnected(i) && !IsClientInGame(iBot) || g_iFakeRanking != 0 && IsFakeClient(iBot == 0 ? i : iBot))//这里判断玩家是否在游戏中或是否显示电脑幸存者.
 				continue;
 
 			assisters[assister_count][0] = !iBot ? i : iBot;
@@ -375,7 +404,7 @@ void IsPlayersNumber()
 }
 
 //显示服务器时间.
-void IsCurrentTime()
+void IsShowServerTime()
 {
 	char g_sData[32], g_sTime[128];
 	FormatTime(g_sData, sizeof(g_sData), "%Y-%m-%d %H:%M:%S");
@@ -385,7 +414,7 @@ void IsCurrentTime()
 }
 
 //显示运行时间.
-void IsChapterStatistics()
+void IsShowRunningTime()
 {
 	char g_sChapter[128];
 	FormatEx(g_sChapter, sizeof(g_sChapter), "运行:%s", StandardizeTime(g_fMapRunTime));
@@ -578,7 +607,7 @@ int GetPlayersMaxNumber(int iTeam, bool bSurvive)
 }
 
 //返回最大人数.
-int IsMaxPlayers()
+int GetMaxPlayers()
 {
 	int g_iMaxcl;
 	Handle invalid = null;

@@ -77,11 +77,12 @@ public void OnAllPluginsLoaded() {
 }
 
 public void OnPluginEnd() {
-	FindConVar("hunter_committed_attack_range").RestoreDefault();
-	FindConVar("hunter_pounce_ready_range").RestoreDefault();
-	FindConVar("hunter_leap_away_give_up_range").RestoreDefault();
-	FindConVar("hunter_pounce_max_loft_angle").RestoreDefault();
 	FindConVar("z_pounce_crouch_delay").RestoreDefault();
+	FindConVar("z_pounce_silence_range").RestoreDefault();
+	FindConVar("hunter_pounce_ready_range").RestoreDefault();
+	FindConVar("hunter_pounce_max_loft_angle").RestoreDefault();
+	FindConVar("hunter_committed_attack_range").RestoreDefault();
+	FindConVar("hunter_leap_away_give_up_range").RestoreDefault();
 }
 
 public void OnConfigsExecuted() {
@@ -219,31 +220,29 @@ bool HitWall(int client, float vStart[3]) {
 	ScaleVector(vEnd, g_fWallDetectionDistance);
 	AddVectors(vStart, vEnd, vEnd);
 
-	static Handle hTrace;
-	hTrace = TR_TraceHullFilterEx(vStart, vEnd, view_as<float>({-16.0, -16.0, 0.0}), view_as<float>({16.0, 16.0, 36.0}), MASK_PLAYERSOLID_BRUSHONLY, TraceEntityFilter);
-	if (TR_DidHit(hTrace)) {
+	static Handle hndl;
+	hndl = TR_TraceHullFilterEx(vStart, vEnd, view_as<float>({-16.0, -16.0, 0.0}), view_as<float>({16.0, 16.0, 33.0}), MASK_PLAYERSOLID_BRUSHONLY, TraceEntityFilter);
+	if (TR_DidHit(hndl)) {
 		static float vPlane[3];
-		TR_GetPlaneNormal(hTrace, vPlane);
-		if (RadToDeg(ArcCosine(GetVectorDotProduct(vAng, vPlane))) > 150.0) {
-			delete hTrace;
+		TR_GetPlaneNormal(hndl, vPlane);
+		if (RadToDeg(ArcCosine(GetVectorDotProduct(vAng, vPlane))) > 165.0) {
+			delete hndl;
 			return true;
 		}
 	}
 
-	delete hTrace;
+	delete hndl;
 	return false;
 }
 
 bool TraceEntityFilter(int entity, int contentsMask) {
-	if (entity <= MaxClients)
-		return false;
+	if (!entity || entity > MaxClients) {
+		static char cls[5];
+		GetEdictClassname(entity, cls, sizeof cls);
+		return cls[3] != 'e' && cls[3] != 'c';
+	}
 
-	static char cls[9];
-	GetEntityClassname(entity, cls, sizeof cls);
-	if ((cls[0] == 'i' && strcmp(cls[1], "nfected") == 0) || (cls[0] == 'w' && strcmp(cls[1], "itch") == 0))
-		return false;
-
-	return true;
+	return false;
 }
 
 bool IsBeingWatched(int client, float offsetThreshold) {
