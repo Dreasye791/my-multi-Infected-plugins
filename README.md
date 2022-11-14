@@ -11,7 +11,7 @@
 | ----------------------- | -------------------- | ------------------------------------------------------------ |
 | l4d2_skill_detect       | 技能检测             | https://github.com/apples1949/l4dplugins                     |
 | l4d2_stat               | 技能检测             | https://github.com/apples1949/l4dplugins                     |
-| AI_HardSI               | 特感AI加强           | 不明                                                         |
+| AI_HardSI               | 特感AI加强           | 钵钵鸡                                                         |
 | l4d_air_abilities_patch | 空中能力             | https://forums.alliedmods.net/showthread.php?p=2660278       |
 | l4d_target_override     | 修改特感攻击优先级   | https://forums.alliedmods.net/showthread.php?p=2688165       |
 | l4d2_unreservelobby     | 动态大厅             | 钵钵鸡                                                       |
