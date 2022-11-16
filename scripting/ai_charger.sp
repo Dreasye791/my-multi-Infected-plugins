@@ -178,7 +178,7 @@ float GetDistanceToRoof(int client, float maxheight = 3000.0) {
 	GetClientMins(client, vMins);
 	GetClientMaxs(client, vMaxs);
 	GetClientAbsOrigin(client, vOrigin);
-	Handle hndl = TR_TraceHullFilterEx(vOrigin, vEnd, vMins, vMaxs, MASK_PLAYERSOLID_BRUSHONLY, TraceEntityFilter);
+	Handle hndl = TR_TraceHullFilterEx(vOrigin, vEnd, vMins, vMaxs, MASK_PLAYERSOLID, TraceEntityFilter);
 	if (TR_DidHit(hndl)) {
 		float fEndPos[3];
 		TR_GetEndPosition(fEndPos, hndl);
@@ -317,90 +317,46 @@ bool IsGrounded(int client) {
 }
 
 bool CheckPlayerMove(int client, float vel) {
-	return vel > 0.0 && vel + 30.0 > GetEntPropFloat(client, Prop_Send, "m_flMaxspeed");
+	return vel > 0.9 * GetEntPropFloat(client, Prop_Send, "m_flMaxspeed") > 0.0;
 }
-/*
+
 Action BunnyHop(int client, int &buttons, const float vAng[3]) {
-	float vFwd[3];
-	float vRig[3];
+	float fwd[3];
+	float rig[3];
 	float vDir[3];
 	float vVel[3];
 	bool pressed;
-	if (buttons & IN_FORWARD || buttons & IN_BACK) {
-		GetAngleVectors(vAng, vFwd, NULL_VECTOR, NULL_VECTOR);
-		NormalizeVector(vFwd, vFwd);
-		ScaleVector(vFwd, buttons & IN_FORWARD ? 180.0 : -90.0);
+	if (buttons & IN_FORWARD && !(buttons & IN_BACK)) {
+		GetAngleVectors(vAng, fwd, NULL_VECTOR, NULL_VECTOR);
+		NormalizeVector(fwd, fwd);
+		ScaleVector(fwd, 180.0);
+		pressed = true;
+	}
+	else if (buttons & IN_BACK && !(buttons & IN_FORWARD)) {
+		GetAngleVectors(vAng, fwd, NULL_VECTOR, NULL_VECTOR);
+		NormalizeVector(fwd, fwd);
+		ScaleVector(fwd, -90.0);
 		pressed = true;
 	}
 
-	if (buttons & IN_MOVERIGHT || buttons & IN_MOVELEFT) {
-		GetAngleVectors(vAng, NULL_VECTOR, vRig, NULL_VECTOR);
-		NormalizeVector(vRig, vRig);
-		ScaleVector(vRig, buttons & IN_MOVERIGHT ? 90.0 : -90.0);
+	if (buttons & IN_MOVERIGHT && !(buttons & IN_MOVELEFT)) {
+		GetAngleVectors(vAng, NULL_VECTOR, rig, NULL_VECTOR);
+		NormalizeVector(rig, rig);
+		ScaleVector(rig, 90.0);
+		pressed = true;
+	}
+	else if (buttons & IN_MOVELEFT && !(buttons & IN_MOVERIGHT)) {
+		GetAngleVectors(vAng, NULL_VECTOR, rig, NULL_VECTOR);
+		NormalizeVector(rig, rig);
+		ScaleVector(rig, -90.0);
 		pressed = true;
 	}
 
 	if (pressed) {
-		AddVectors(vFwd, vRig, vDir);
+		AddVectors(fwd, rig, vDir);
 		GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", vVel);
 		AddVectors(vVel, vDir, vVel);
-		if (WontFall(client, vVel)) {
-			buttons |= IN_DUCK;
-			buttons |= IN_JUMP;
-			TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, vVel);
-			return Plugin_Changed;
-		}
-	}
-
-	return Plugin_Continue;
-}*/
-
-Action BunnyHop(int client, int &buttons, const float vAng[3]) {
-	float vVec[3];
-	float vDir[3];
-	float vVel[3];
-	bool pressed;
-	if (buttons & IN_FORWARD) {
-		GetAngleVectors(vAng, vDir, NULL_VECTOR, NULL_VECTOR);
-		NormalizeVector(vDir, vDir);
-		ScaleVector(vDir, 180.0);
-		pressed = true;
-	}
-
-	if (buttons & IN_BACK) {
-		GetAngleVectors(vAng, vVec, NULL_VECTOR, NULL_VECTOR);
-		NormalizeVector(vVec, vVec);
-		ScaleVector(vVec, -90.0);
-		if (!pressed)
-			pressed = true;
-		else
-			AddVectors(vVec, vDir, vDir);
-	}
-
-	if (buttons & IN_MOVERIGHT) {
-		GetAngleVectors(vAng, NULL_VECTOR, vVec, NULL_VECTOR);
-		NormalizeVector(vVec, vVec);
-		ScaleVector(vVec, 90.0);
-		if (!pressed)
-			pressed = true;
-		else
-			AddVectors(vVec, vDir, vDir);
-	}
-
-	if (buttons & IN_MOVELEFT) {
-		GetAngleVectors(vAng, NULL_VECTOR, vVec, NULL_VECTOR);
-		NormalizeVector(vVec, vVec);
-		ScaleVector(vVec, -90.0);
-		if (!pressed)
-			pressed = true;
-		else
-			AddVectors(vVec, vDir, vDir);
-	}
-
-	if (pressed) {
-		GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", vVel);
-		AddVectors(vVel, vDir, vVel);
-		if (WontFall(client, vVel)) {
+		if (CheckHopVel(client, vVel)) {
 			buttons |= IN_DUCK;
 			buttons |= IN_JUMP;
 			TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, vVel);
@@ -411,7 +367,7 @@ Action BunnyHop(int client, int &buttons, const float vAng[3]) {
 	return Plugin_Continue;
 }
 
-bool WontFall(int client, const float vVel[3]) {
+bool CheckHopVel(int client, const float vVel[3]) {
 	static float vPos[3];
 	static float vEnd[3];
 	GetClientAbsOrigin(client, vPos);
@@ -422,36 +378,40 @@ bool WontFall(int client, const float vVel[3]) {
 	GetClientMins(client, vMins);
 	GetClientMaxs(client, vMaxs);
 
-	static bool didHit;
+	static bool hit;
+	static float val;
 	static Handle hndl;
 	static float vVec[3];
 	static float vNor[3];
 	static float vPlane[3];
 
-	didHit = false;
+	hit = false;
 	vPos[2] += 10.0;
 	vEnd[2] += 10.0;
-	hndl = TR_TraceHullFilterEx(vPos, vEnd, vMins, vMaxs, MASK_PLAYERSOLID_BRUSHONLY, TraceEntityFilter);
+	hndl = TR_TraceHullFilterEx(vPos, vEnd, vMins, vMaxs, MASK_PLAYERSOLID, TraceEntityFilter);
 	if (TR_DidHit(hndl)) {
-		didHit = true;
+		hit = true;
 		TR_GetEndPosition(vVec, hndl);
 		NormalizeVector(vVel, vNor);
 		TR_GetPlaneNormal(hndl, vPlane);
-		if (RadToDeg(ArcCosine(GetVectorDotProduct(vNor, vPlane))) > 165.0) {
+		val = RadToDeg(ArcCosine(GetVectorDotProduct(vNor, vPlane)));
+		if (val <= 90.0 || val > 165.0) {
 			delete hndl;
 			return false;
 		}
 	}
 
 	delete hndl;
-	static float dist;
-	if (!didHit)
+	if (!hit)
 		vVec = vEnd;
 	else {
 		MakeVectorFromPoints(vPos, vVec, vEnd);
-		dist = GetVectorLength(vEnd) - 0.5 * (FloatAbs(vMaxs[0] - vMins[0])) - 3.0;
+		val = GetVectorLength(vEnd) - 0.5 * (FloatAbs(vMaxs[0] - vMins[0])) - 3.0;
+		if (val < 0.0)
+			return false;
+
 		NormalizeVector(vEnd, vEnd);
-		ScaleVector(vEnd, dist);
+		ScaleVector(vEnd, val);
 		AddVectors(vPos, vEnd, vVec);
 	}
 
@@ -460,31 +420,15 @@ bool WontFall(int client, const float vVel[3]) {
 	vDown[1] = vVec[1];
 	vDown[2] = vVec[2] - 100000.0;
 
-	hndl = TR_TraceHullFilterEx(vVec, vDown, vMins, vMaxs, MASK_ALL, TraceSelfFilter, client);
+	hndl = TR_TraceHullFilterEx(vVec, vDown, vMins, vMaxs, MASK_PLAYERSOLID, TraceSelfFilter, client);
 	if (!TR_DidHit(hndl)) {
 		delete hndl;
 		return false;
 	}
 
 	TR_GetEndPosition(vEnd, hndl);
-	if (vVec[2] - vEnd[2] > 104.0) {
-		delete hndl;
-		return false;
-	}
-
-	static int ent;
-	ent = TR_GetEntityIndex(hndl);
-	if (ent != -1) {
-		static char cls[14];
-		GetEntityClassname(ent, cls, sizeof cls);
-		if (strcmp(cls, "trigger_hurt") == 0) {
-			delete hndl;
-			return false;
-		}
-	}
-
 	delete hndl;
-	return true;
+	return vVec[2] - vEnd[2] < 104.0;
 }
 
 bool TraceSelfFilter(int entity, int contentsMask, any data) {
@@ -555,12 +499,12 @@ bool HitWall(int client, int target) {
 	vMins[2] += dist > 49.0 ? 10.0 : 45.0;
 	vMaxs[2] -= 10.0;
 
-	static bool didHit;
+	static bool hit;
 	static Handle hndl;
 	hndl = TR_TraceHullFilterEx(vPos, vTar, vMins, vMaxs, MASK_PLAYERSOLID, TraceEntityFilter);
-	didHit = TR_DidHit(hndl);
+	hit = TR_DidHit(hndl);
 	delete hndl;
-	return didHit;
+	return hit;
 }
 
 bool IsCharging(int client) {

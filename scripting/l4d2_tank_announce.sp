@@ -2,10 +2,12 @@
 //強制1.7以後的新語法
 #pragma newdecls required
 #include <sourcemod>
+#include <sdktools>
 #include <l4d2_GetWitchNumber>
 
 #define iArray	4
 #define CVAR_FLAGS	FCVAR_NOTIFY
+#define TankSound	"ui/pickup_secret01.wav"
 
 int g_iMultiplesCount;
 float g_fMultiples[iArray];
@@ -22,7 +24,7 @@ public Plugin myinfo =
 	name = "L4D2 Tank Announcer",
 	author = "Visor, 豆瓣酱な",
 	description = "Announce in chat and via a sound when a Tank has spawned",
-	version = "1.3.3",
+	version = "1.4.3",
 	url = "https://github.com/Attano"
 };
 
@@ -56,7 +58,9 @@ public void OnPluginStart()
 public void OnMapStart()
 {
 	iHealthCvars();
+	PrecacheSound(TankSound);
 	TankSpawnFinaleVehicleLeaving = false;
+	
 }
 
 public void iHealthConVarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -134,6 +138,7 @@ public void Event_TankSpawn(Event event, const char[] name, bool dontBroadcast)
 	
 	if (IsValidClient(client))
 	{
+		EmitSoundToAll(TankSound);
 		for (int i = 0; i < iArray; i++)
 			if (StrEqual(GetGameDifficulty(), g_sDifficultyCode[i], false))
 				IsSetTankHealth(client, g_fMultiples[i] == 0 ? 1.0 : g_fMultiples[i], g_sDifficultyName[i]);

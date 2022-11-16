@@ -103,7 +103,7 @@ void IsSetServerTick()
 	SetConVarInt(FindConVar("net_splitpacket_maxrate"), g_iNetMaxRate, false, false);
 	SetConVarInt(FindConVar("net_splitrate"), 2, false, false);
 	SetConVarFloat(FindConVar("net_maxcleartime"), 0.0001, false, false);
-	SetConVarFloat(FindConVar("nb_update_frequency"), 0.024, false, false);
+	SetConVarFloat(FindConVar("nb_update_frequency"), 0.014, false, false);
 
 	if (g_iTickRate > 30)//设置的tick大于30,所以这里验证下设置tick成功没有
 		RequestFrame(IsVerifyServerTick);//延迟一帧获取服务器的tick值.

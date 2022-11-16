@@ -31,8 +31,8 @@ public Plugin myinfo = {
 
 public void OnPluginStart() {
 	CreateConVar("l4d_unreserve_version", PLUGIN_VERSION, "Version of the Lobby Unreserve plugin.", FCVAR_NOTIFY|FCVAR_DONTRECORD);
-	g_cvUnreserve =			CreateConVar("l4d_unreserve_full",	"1",	"Automatically unreserve server after a full lobby joins", FCVAR_SPONLY|FCVAR_NOTIFY);
-	g_cvAutoLobby =			CreateConVar("l4d_autolobby",		"1",	"Automatically adjust sv_allow_lobby_connect_only. When lobby full it set to 0, when server empty it set to 1", FCVAR_SPONLY|FCVAR_NOTIFY);
+	g_cvUnreserve =			CreateConVar("l4d_unreserve_full",	"1",	"是否满人后删除大厅", FCVAR_SPONLY|FCVAR_NOTIFY);
+	g_cvAutoLobby =			CreateConVar("l4d_autolobby",		"1",	"仅自动调整sv_allow_lobby_connect_only。当大厅已满时设置为0，当服务器为空时设置为1", FCVAR_SPONLY|FCVAR_NOTIFY);
 	g_cvSvAllowLobbyCo =	FindConVar("sv_allow_lobby_connect_only");
 
 	g_cvUnreserve.AddChangeHook(CvarChanged);
@@ -40,7 +40,7 @@ public void OnPluginStart() {
 
 	HookEvent("player_disconnect", Event_PlayerDisconnect, EventHookMode_Pre);
 
-	RegAdminCmd("sm_unreserve", cmdUnreserve, ADMFLAG_BAN, "sm_unreserve - manually force removes the lobby reservation");
+	RegAdminCmd("sm_unreserve", cmdUnreserve, ADMFLAG_BAN, "sm_unreserve - 强制删除大厅");
 }
 
 Action cmdUnreserve(int client, int args) {
