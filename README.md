@@ -16,7 +16,7 @@
 | l4d_target_override     | 修改特感攻击优先级   | https://forums.alliedmods.net/showthread.php?p=2688165       |
 | l4d2_unreservelobby     | 动态大厅             | 钵钵鸡                                                       |
 | l4d2_ai_damagefix       | 移除牛牛和猎手的减伤 | https://github.com/Tabbernaut/L4D2-Plugins/tree/master/ai_damagefi |
-
+| specialspawner          | 多特感插件           | 钵钵鸡                                                         |
 
 
 变动的文件：
@@ -24,4 +24,4 @@
 | 名称                 | 描述                                                         | 原来源           |
 | -------------------- | ------------------------------------------------------------ | ---------------- |
 | l4d2_survivor_health | 添加了一个新 cfg 参数 `l4d2_health_print_enable` 。用于开关个人击杀回血提示的消息栏输出。 | 豆瓣包2022-11-08 |
-
+| l4d2_tickrate_enabler | 修改了一个内部参数，默认对 `nb_update_frequency` 赋值是 `0.024` ，修改为 `0.014` 。 | 豆瓣包2022-11-08 |
