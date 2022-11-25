@@ -16,7 +16,7 @@
 | l4d_target_override     | 修改特感攻击优先级   | https://forums.alliedmods.net/showthread.php?p=2688165       |
 | l4d2_unreservelobby     | 动态大厅             | 钵钵鸡                                                       |
 | l4d2_ai_damagefix       | 移除牛牛和猎手的减伤 | https://github.com/Tabbernaut/L4D2-Plugins/tree/master/ai_damagefi |
-| specialspawner          | 多特感插件           | 钵钵鸡                                                         |
+| l4d2_hunter_patch       | hunter 补丁           | https://forums.alliedmods.net/showthread.php?t=337071                                                        |
 
 
 变动的文件：
