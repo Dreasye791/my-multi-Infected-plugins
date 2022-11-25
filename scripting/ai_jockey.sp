@@ -41,7 +41,6 @@ public void OnPluginStart() {
 
 	HookEvent("round_end",		Event_RoundEnd,		EventHookMode_PostNoCopy);
 	HookEvent("player_spawn",	Event_PlayerSpawn);
-	HookEvent("player_shoved",	Event_PlayerShoved);
 	HookEvent("jockey_ride",	Event_JockeyRide,	EventHookMode_Pre);
 }
 
@@ -74,37 +73,26 @@ void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast) {
 	g_fLeapAgainTime[GetClientOfUserId(event.GetInt("userid"))] = 0.0;
 }
 
-void Event_PlayerShoved(Event event, const char[] name, bool dontBroadcast) {
-	int client = GetClientOfUserId(event.GetInt("userid"));
-	if (IsBotJockey(client))
-		g_fLeapAgainTime[client] = GetGameTime() + g_fJockeyLeapAgain;
-}
-
-bool IsBotJockey(int client) {
-	return client && IsClientInGame(client) && IsFakeClient(client) && GetClientTeam(client) == 3 && GetEntProp(client, Prop_Send, "m_zombieClass") == 5;
-}
-
 void Event_JockeyRide(Event event, const char[] name, bool dontBroadcast) {	
 	if (g_fJockeyStumbleRadius <= 0.0 || !L4D2_IsGenericCooperativeMode())
+		return;
+
+	int victim = GetClientOfUserId(event.GetInt("victim"));
+	if (!victim || !IsClientInGame(victim))
 		return;
 
 	int attacker = GetClientOfUserId(event.GetInt("userid"));
 	if (!attacker || !IsClientInGame(attacker))
 		return;
 
-	int victim = GetClientOfUserId(event.GetInt("victim"));
-	if (!victim || !IsClientInGame(victim))
-		return;
-	
 	StumbleByStanders(victim, attacker);
 }
 
 void StumbleByStanders(int target, int pinner) {
-	static int i;
-	static float vecPos[3];
-	static float vecTarget[3];
+	float vecPos[3];
+	float vecTarget[3];
 	GetClientAbsOrigin(target, vecPos);
-	for (i = 1; i <= MaxClients; i++) {
+	for (int i = 1; i <= MaxClients; i++) {
 		if (i == target || i == pinner || !IsClientInGame(i) || GetClientTeam(i) != 2 || !IsPlayerAlive(i) || IsPinned(i))
 			continue;
 
@@ -136,66 +124,55 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	if (L4D_IsPlayerStaggering(client))
 		return Plugin_Continue;
 
-	static float nearestSurDist;
-	nearestSurDist = NearestSurDistance(client);
-	if (nearestSurDist > g_fHopActivationProximity)
+	static float distance;
+	distance = NearestSurDistance(client);
+	if (distance > g_fHopActivationProximity)
 		return Plugin_Continue;
 
-	if (IsGrounded(client)) {
-		static float vAng[3];
-		if (g_bDoNormalJump[client]) {
-			if (buttons & IN_FORWARD) {
-				vAng = angles;
-				vAng[0] = Math_GetRandomFloat(-10.0, 0.0);
-				TeleportEntity(client, NULL_VECTOR, vAng, NULL_VECTOR);
-			}
-
-			buttons |= IN_JUMP;
-			switch (Math_GetRandomInt(0, 2)) {
-				case 0:
-					buttons |= IN_DUCK;
-	
-				case 1:
-					buttons |= IN_ATTACK2;
-			}
-			g_bDoNormalJump[client] = false;
-		}
-		else {
-			static float time;
-			if (g_fLeapAgainTime[client] < (time = GetGameTime())) {
-				if (nearestSurDist < g_fJockeyLeapRange) {
-					switch (Math_GetRandomInt(0, 1)) {
-						case 0:
-							buttons |= IN_FORWARD;
-	
-						case 1:
-							buttons |= IN_BACK;
-					}
-
-					if (Math_GetRandomInt(0, 1) && WithinViewAngle(client, 60.0)) {
-						vAng = angles;
-						vAng[0] = Math_GetRandomFloat(-30.0, -10.0);
-						TeleportEntity(client, NULL_VECTOR, vAng, NULL_VECTOR);
-					}
-				}
-
-				buttons |= IN_ATTACK;
-				g_bDoNormalJump[client] = true;
-				g_fLeapAgainTime[client] = time + g_fJockeyLeapAgain;
-			}
-		}
-	}
-	else {
+	if (!IsGrounded(client)) {
 		buttons &= ~IN_JUMP;
 		buttons &= ~IN_ATTACK;
 	}
 
-	return Plugin_Continue;
+	if (g_bDoNormalJump[client]) {
+		g_bDoNormalJump[client] = false;
+		if (buttons & IN_FORWARD && WithinViewAngle(client, 60.0)) {
+			switch (Math_GetRandomInt(0, 1)) {
+				case 0:
+					buttons |= IN_MOVELEFT;
+	
+				case 1:
+					buttons |= IN_MOVERIGHT;
+			}
+		}
+
+		buttons |= IN_JUMP;
+
+		switch (Math_GetRandomInt(0, 2)) {
+			case 0:
+				buttons |= IN_DUCK;
+	
+			case 1:
+				buttons |= IN_ATTACK2;
+		}
+	}
+	else {
+		static float time;
+		time = GetGameTime();
+		if (g_fLeapAgainTime[client] < time) {
+			if (distance < g_fJockeyLeapRange )
+				buttons |= IN_ATTACK;
+
+			g_bDoNormalJump[client] = true;
+			g_fLeapAgainTime[client] = time + g_fJockeyLeapAgain;
+		}
+	}
+
+	return Plugin_Changed;
 }
 
 bool IsGrounded(int client) {
-	int ent = GetEntPropEnt(client, Prop_Send, "m_hGroundEntity");
-	return ent != -1 && IsValidEntity(ent);
+	return GetEntPropEnt(client, Prop_Send, "m_hGroundEntity") != -1;
 }
 
 bool IsAliveSur(int client) {
@@ -340,18 +317,4 @@ int Math_GetRandomInt(int min, int max)
 	}
 
 	return RoundToCeil(float(random) / (float(2147483647) / float(max - min + 1))) + min - 1;
-}
-
-/**
- * Returns a random, uniform Float number in the specified (inclusive) range.
- * This is safe to use multiple times in a function.
- * The seed is set automatically for each plugin.
- *
- * @param min			Min value used as lower border
- * @param max			Max value used as upper border
- * @return				Random Float number between min and max
- */
-float Math_GetRandomFloat(float min, float max)
-{
-	return (GetURandomFloat() * (max  - min)) + min;
 }

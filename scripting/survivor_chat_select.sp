@@ -11,7 +11,7 @@
 #define PLUGIN_NAME				"Survivor Chat Select"
 #define PLUGIN_AUTHOR			"DeatChaos25, Mi123456 & Merudo, Lux, SilverShot"
 #define PLUGIN_DESCRIPTION		"Select a survivor character by typing their name into the chat."
-#define PLUGIN_VERSION			"1.7.6"
+#define PLUGIN_VERSION			"1.7.7"
 #define PLUGIN_URL				"https://forums.alliedmods.net/showthread.php?p=2399163#post2399163"
 
 #define GAMEDATA				"survivor_chat_select"
@@ -65,6 +65,7 @@ bool
 	g_bTransition,
 	g_bInTransition,
 	g_bBlockUserMsg,
+	g_bPrepRestoreBots,
 	g_bIgnoreOnce[MAXPLAYERS + 1];
 
 static const char
@@ -521,9 +522,9 @@ Action umSayText2(UserMsg msg_id, BfRead msg, const int[] players, int playersNu
 	msg.ReadByte();
 	msg.ReadByte();
 
-	char sMessage[254];
-	msg.ReadString(sMessage, sizeof sMessage, true);
-	if (strcmp(sMessage, "#Cstrike_Name_Change") == 0)
+	char buffer[254];
+	msg.ReadString(buffer, sizeof buffer, true);
+	if (strcmp(buffer, "#Cstrike_Name_Change") == 0)
 		return Plugin_Handled;
 
 	return Plugin_Continue;
@@ -546,11 +547,11 @@ void CvarChanged(ConVar convar, const char[] oldValue, const char[] newValue) {
 }
 
 void GetCvars() {
-	g_bCookie = g_cvCookie.BoolValue;
-	g_bAutoModel= g_cvAutoModel.BoolValue;
-	g_iTabHUDBar = g_cvTabHUDBar.IntValue;
-	g_bAdminsOnly = g_cvAdminsOnly.BoolValue;
-	g_bInTransition = g_cvInTransition.BoolValue;
+	g_bCookie =			g_cvCookie.BoolValue;
+	g_bAutoModel=		g_cvAutoModel.BoolValue;
+	g_iTabHUDBar =		g_cvTabHUDBar.IntValue;
+	g_bAdminsOnly =		g_cvAdminsOnly.BoolValue;
+	g_bInTransition =	g_cvInTransition.BoolValue;
 }
 
 void Event_RoundStart(Event event, char[] name, bool dontBroadcast) {
@@ -699,13 +700,12 @@ public void OnEntityCreated(int entity, const char[] classname) {
 }
 
 void PlayerSpawnPost(int client) {
-	if (GetClientTeam(client) != 2)
-		return;
+	if (GetClientTeam(client) == 2) {
+		SDKUnhook(client, SDKHook_SpawnPost, PlayerSpawnPost);
 
-	SDKUnhook(client, SDKHook_SpawnPost, PlayerSpawnPost);
-
-	if (!g_bInTransition || g_iTransitioning[client] != 1)
-		RequestFrame(NextFrame_Player, GetClientUserId(client));
+		if (!g_bInTransition || g_iTransitioning[client] != 1)
+			RequestFrame(NextFrame_Player, GetClientUserId(client));
+	}
 
 	g_iTransitioning[client] = -1;
 }
@@ -726,7 +726,19 @@ void NextFrame_Player(int client) {
 	if (!IsClientInGame(client) || GetClientTeam(client) != 2)
 		return;
 
-	SetLeastCharacter(client);
+	static bool once[MAXPLAYERS + 1];
+	if (once[client] && !PrepTransition() && !PrepRestoreBots()) {
+		once[client] = false;
+		SetLeastCharacter(client);
+	}
+	else {
+		once[client] = !PrepTransition() && !PrepRestoreBots();
+
+		if (!g_bInTransition)
+			SetLeastCharacter(client);
+		else
+			RequestFrame(NextFrame_Player, GetClientUserId(client));
+	}
 }
 
 void NextFrame_Bot(int client) {
@@ -1024,12 +1036,32 @@ void InitGameData() {
 }
 
 void SetupDetours(GameData hGameData = null) {
-	DynamicDetour dDetour = DynamicDetour.FromConf(hGameData, "DD::InfoChangelevel::ChangeLevelNow");
+	DynamicDetour dDetour = DynamicDetour.FromConf(hGameData, "DD::RestoreTransitionedSurvivorBots");
+	if (!dDetour)
+		SetFailState("Failed to create DynamicDetour: \"DD::RestoreTransitionedSurvivorBots\"");
+
+	if (!dDetour.Enable(Hook_Pre, DD_RestoreTransitionedSurvivorBot_Pre))
+		SetFailState("Failed to detour pre: \"DD::RestoreTransitionedSurvivorBots\"");
+
+	if (!dDetour.Enable(Hook_Post, DD_RestoreTransitionedSurvivorBot_Post))
+		SetFailState("Failed to detour post: \"DD::RestoreTransitionedSurvivorBots\"");
+
+	dDetour = DynamicDetour.FromConf(hGameData, "DD::InfoChangelevel::ChangeLevelNow");
 	if (!dDetour)
 		SetFailState("Failed to create DynamicDetour: \"DD::InfoChangelevel::ChangeLevelNow\"");
 
 	if (!dDetour.Enable(Hook_Post, DD_InfoChangelevel_ChangeLevelNow_Post))
 		SetFailState("Failed to detour post: \"DD::InfoChangelevel::ChangeLevelNow\"");
+}
+
+MRESReturn DD_RestoreTransitionedSurvivorBot_Pre() {
+	g_bPrepRestoreBots = true;
+	return MRES_Ignored;
+}
+
+MRESReturn DD_RestoreTransitionedSurvivorBot_Post() {
+	g_bPrepRestoreBots = false;
+	return MRES_Ignored;
 }
 
 MRESReturn DD_InfoChangelevel_ChangeLevelNow_Post(Address pThis) {
@@ -1043,10 +1075,39 @@ public void OnMapEnd() {
 		g_iTransitioning[i] = val;
 
 	g_bTransition = false;
+	g_bPrepRestoreBots = false;
 }
 
 bool PrepRestoreBots() {
-	return SDKCall(g_hSDK_CDirector_IsInTransition, g_pDirector) && LoadFromAddress(g_pSavedSurvivorBotsCount, NumberType_Int32);
+	return g_bPrepRestoreBots || (SDKCall(g_hSDK_CDirector_IsInTransition, g_pDirector) && LoadFromAddress(g_pSavedSurvivorBotsCount, NumberType_Int32));
+}
+
+bool PrepTransition() {
+	if (!SDKCall(g_hSDK_CDirector_IsInTransition, g_pDirector))
+		return false;
+
+	int count = LoadFromAddress(g_pSavedPlayersCount, NumberType_Int32);
+	if (!count)
+		return false;
+
+	Address kv = view_as<Address>(LoadFromAddress(g_pSavedPlayersCount + view_as<Address>(4), NumberType_Int32));
+	if (!kv)
+		return false;
+
+	Address ptr;
+	for (int i; i < count; i++) {
+		ptr = view_as<Address>(LoadFromAddress(kv + view_as<Address>(4 * i), NumberType_Int32));
+		if (!ptr)
+			continue;
+
+		if (SDKCall(g_hSDK_KeyValues_GetInt, ptr, "teamNumber", 0) != 2)
+			continue;
+
+		if (SDKCall(g_hSDK_KeyValues_GetInt, ptr, "restoreState", 0))
+			return false;
+	}
+
+	return true;
 }
 
 bool IsTransitioning(int userid) {
